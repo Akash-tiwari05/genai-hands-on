@@ -170,9 +170,3 @@ If you found this repository helpful, give it a ⭐ on GitHub!
 - Java Full Stack Developer
 - Exploring Generative AI & AI Engineering
 - Passionate about building real-world applications
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License.
