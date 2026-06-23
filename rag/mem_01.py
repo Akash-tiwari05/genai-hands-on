@@ -2,8 +2,14 @@ import os
 from mem0 import Memory
 from google import genai
 
-# Set your Google AI Studio API key
-os.environ["GOOGLE_API_KEY"] = "your_gemini_api_key_here"
+# get API key
+api_key = os.getenv("GEMINI_API_KEY")
+
+# create client
+if not api_key:
+    raise ValueError("GEMINI_API_KEY not found")
+
+client = genai.Client(api_key=api_key)
 
 # 1. Configure Mem0 to use Gemini for both LLM processing and embeddings
 config = {
