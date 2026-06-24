@@ -1,18 +1,32 @@
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from langsmith import wrappers
+from langsmith import traceable
 import json
 import os
 
 # Load environment variables from .env
 load_dotenv()
 
-# Configure Gemini API Key
-client = genai.Client()
+# Instantiate the regular Google Gen AI client
+raw_client = genai.Client(
+    api_key=os.getenv("GOOGLE_API_KEY")
+)
 
-# Load Gemini model
-model = genai.GenerativeModel("gemini-1.5-flash")
+# Wrap the client to intercept operations and log them to LangSmith
+client = wrappers.wrap_gemini(
+    raw_client,
+    tracing_extra={
+        "tags": ["gemini", "python"],
+        "metadata": {
+            "integration": "google-genai",
+        },
+    },
+)
 
 
+
+@traceable
 def get_weather(city: str):
     # TODO: Replace with actual weather API
     return "31 degree celsius"
@@ -67,14 +81,9 @@ Output:
 user_query = "What is the current weather of Agra?"
 
 # Generate response from Gemini
-response = model.generate_content(
-    [
-        {"role": "user", "parts": [system_prompt]},
-        {"role": "user", "parts": [user_query]},
-    ],
-    generation_config={
-        "response_mime_type": "application/json"
-    }
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=f"{system_prompt}\n\nUser Query: {user_query}",
 )
 
 # Print Gemini response
