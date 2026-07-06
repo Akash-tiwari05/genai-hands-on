@@ -1,9 +1,11 @@
 import os
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from typing import Literal
+from pydantic import BaseModel
 
 
 load_dotenv()
@@ -15,6 +17,13 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+#Schema
+class DetectCallResponse(BaseModel):
+    is_coding_question: bool
+
+class CodingAIResponse(BaseModel):
+    answer: str
+
 class State(TypedDict) :
     user_message: str
     ai_message: str
@@ -23,13 +32,34 @@ class State(TypedDict) :
 def detect_query(state: State):
     user_message = state.get("user_message") 
 
+    system_prompt = """
+    You are an AI assistant. Your job is to detect if the user's query is related to coding question or not.
+
+    Return the response in specified JSON boolean only.
+    """
+
     #gemini call 
-    state["is_coding_question"] = True
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+            response_schema=DetectCallResponse,
+        ),
+    )
+    
+
+    print(response.parsed)
+
+
+
+    state["is_coding_question"] = response.parsed.is_coding_question
     return state
 
 def route_edge(state: State) -> Literal["solve_coding_quetion","solve_simple_quetion"]:
 
-    is_coding_question = state.get("is_coding_question")
+    is_coding_question = state["is_coding_question"]
 
     if is_coding_question:
         return "solve_coding_quetion"
@@ -37,18 +67,52 @@ def route_edge(state: State) -> Literal["solve_coding_quetion","solve_simple_que
         return "solve_simple_quetion"
 
 def solve_coding_quetion(state: State):
-    user_message = state.get("user_message")
+    user_message = state["user_message"]
 
     #gemini call( coding Question 3.0 pro)
-    state["ai_message"] = "Here is your coding question answer" 
+    system_prompt = """
+    You are an AI assistant. Your job is to resolve the user query based on the coding problem he facing.
+    """
+
+    #gemini call 
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+            response_schema=CodingAIResponse,
+        ),
+    )
+    
+
+    print(response.text)
+    state["ai_message"] = response.parsed.answer 
     return state
 
 
 def solve_simple_quetion(state: State):
-    user_message = state.get("user_message")
+    user_message = state["user_message"]
 
     #gemini call( coding Question 2.5 flash)
-    state["ai_message"] = "Please ask some coding related question" 
+    system_prompt = """
+    You are an AI assistant. Your job is to resolve the user query which are not coding problems.
+    """
+
+    #gemini call 
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+            response_schema=CodingAIResponse,
+        ),
+    )
+    
+
+    print(response.text)
+    state["ai_message"] = response.parsed.answer 
     return state
 
 
@@ -71,7 +135,7 @@ graph = graph_builder.compile()
 #use graph
 def call_graph():
     state = {
-        "user_message":"Hey there! How are you?",
+        "user_message":"Can you explain pydentic in python?",
         "ai_message": "",
         "is_coding_question": False
     }
