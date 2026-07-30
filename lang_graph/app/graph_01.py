@@ -29,5 +29,10 @@ graph_builder.add_node("chatbot", chatbot)
 graph_builder.add_edge(START, "chatbot")
 graph_builder.add_edge("chatbot", END)
 
+#without any memory
 graph = graph_builder.compile()
 
+
+#create a new graph with given checkpointer
+def create_chat_pointer(checkpointer):
+    return graph_builder.compile(checkpointer = checkpointer)
