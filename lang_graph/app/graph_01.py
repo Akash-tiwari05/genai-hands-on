@@ -1,38 +1,69 @@
 from typing import Annotated
 from typing_extensions import TypedDict
-from langchain_core.messages import AnyMessage
-from langgraph.graph.message import add_messages
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import StateGraph,START, END
+
 from dotenv import load_dotenv
+
+from langchain_core.messages import AnyMessage
+from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.types import interrupt
 
 load_dotenv()
 
 
-class State(TypedDict):
-    messages: Annotated[list[AnyMessage], add_messages]
+@tool
+def human_assistance_tool(query: str):
+    """Request assistance from a human."""
+
+    human_response = interrupt(
+        {
+            "query": query
+        }
+    )
+
+    return human_response["data"]
+
 
 model = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0,
 )
 
+model = model.bind_tools([human_assistance_tool])
+
+
+class State(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+
 
 def chatbot(state: State):
-    messages = state["messages"]
-    response = model.invoke(messages)
-    return {"messages": [response]}
+    response = model.invoke(state["messages"])
 
-graph_builder = StateGraph(State)
-
-graph_builder.add_node("chatbot", chatbot)
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge("chatbot", END)
-
-#without any memory
-graph = graph_builder.compile()
+    return {
+        "messages": [response]
+    }
 
 
-#create a new graph with given checkpointer
+builder = StateGraph(State)
+
+builder.add_node("chatbot", chatbot)
+builder.add_node("tools", ToolNode([human_assistance_tool]))
+
+builder.add_edge(START, "chatbot")
+
+builder.add_conditional_edges(
+    "chatbot",
+    tools_condition,
+)
+
+builder.add_edge("tools", "chatbot")
+
+graph = builder.compile()
+
+
 def create_chat_pointer(checkpointer):
-    return graph_builder.compile(checkpointer = checkpointer)
+    return builder.compile(checkpointer=checkpointer)
